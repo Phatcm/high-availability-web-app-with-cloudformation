@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create security groups, autoscaling group, launch configuration, target group, load balancer, and listener.
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+  AMItoUse:
+    Description: AMI to use for our base image - Ubuntu Server 20.04 LTS (HVM), SSD Volume Type
+    Type: String
+    Default: "ami-0261755bbcb8c4a84"
+
+  ManagedPolicies:
+    Description: "The AWS Managed Policy for the EC2 Instance Role"
+    Type: CommaDelimitedList
+
+  KeyPairName:
+    Description: Key Pair Name Created
+    Type: String
+
+  InstanceType:
+    Type: String
+    Description: "EC2 instance type. For the second project required 2vCPU and 4GiB of Memory, so t3.medium is the best fits for this spec."
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t2.medium
+      - t3.medium
+
+Resources:
+  LoadBalacerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: The load balancer should allow all public traffic on port 80 inbound and port 80 outbound to reach the internal servers
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} LoadBalacerSecurityGroup
+
+  AutoScalingSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} AutoScalingSecurityGroup
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
+      SecurityGroups:
+        - !Ref LoadBalacerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} LoadBalancer
+
+  # Listen Request from Client to LoadBalancer and forward to LoadBalancingTargetGroup
+  LoadBalancingListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancingTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Confirm Actions for Listener
+  LoadBalancingListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancingTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values: [/]
+      ListenerArn: !Ref LoadBalancingListener
+      Priority: 1
+
+  # Connect and check health EC2
+  LoadBalancingTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${EnvironmentName}-VPCID"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} LoadBalancingTargetGroup
+
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Description: "The IAM role of second project that allow S3 read only and SSM Managed Instance Core"
+      ManagedPolicyArns: !Ref ManagedPolicies
+
+  WebServerInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref WebServerRole
+
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${EnvironmentName}-LaunchTemplate"
+      LaunchTemplateData:
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            apt-get update -y
+            apt-get install apache2 -y
+            systemctl start apache2.service
+            cd /var/www/html
+            echo "Demo Web Server Up and Running!" > index.html
+        ImageId: !Ref AMItoUse
+        KeyName: !Ref KeyPairName
+        IamInstanceProfile:
+          Arn: !GetAtt WebServerInstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref AutoScalingSecurityGroup
+        InstanceType: !Ref InstanceType
+        BlockDeviceMappings:
+          - DeviceName: "/dev/sdk"
+            Ebs:
+              VolumeSize: "10"
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: "1"
+      MinSize: "2"
+      MaxSize: "5"
+      TargetGroupARNs:
+        - Ref: LoadBalancingTargetGroup
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: false
+          Value: !Sub ${EnvironmentName} AutoScalingGroup
+
+Outputs:
+  WebServerLoadBalancerURL:
+    Description: "Load balancer URL within the http:// in front"
+    Value:
+      Fn::Sub:
+        - "http://${load_balancer_dns_name}"
+        - load_balancer_dns_name:
+            Fn::GetAtt: "LoadBalancer.DNSName"
+    Export:
+      Name: !Sub ${EnvironmentName}-load-balancer-dns-name

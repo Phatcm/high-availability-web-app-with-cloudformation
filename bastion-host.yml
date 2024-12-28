@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create bastion host to SSH to private server
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+  AMItoUse:
+    Description: AMI to use for our base image - Ubuntu Server 20.04 LTS (HVM), SSD Volume Type
+    Type: String
+    Default: "ami-0261755bbcb8c4a84"
+
+  KeyPairName:
+    Description: Key Pair Name Created
+    Type: String
+
+Resources:
+  # Security Group
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: mySecurityGroup
+      GroupDescription: Allow SSH from locally and SSH to Private Server through Private IP
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: "Allow SSH to Bastion Host"
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: !Sub "${EnvironmentName}-PrivateSubnet1CIDR"
+          Description: "Allow SSH from Bastion Host to Private Server"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue: !Sub "${EnvironmentName}-PrivateSubnet2CIDR"
+          Description: "Allow SSH from Bastion Host to Private Server"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} SecurityGroup Bastion
+
+  # IAM Role to allow EC2 Session Manager to access our server
+  IAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} IAMRole
+
+  # Instance Profile
+  ServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref IAMRole
+
+  # BastionHost EC2 Instance
+  BastionHostInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref AMItoUse
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref ServerInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref SecurityGroup
+          SubnetId:
+            Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} EC2 Bastion

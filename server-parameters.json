@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "MyProject"
+  },
+  {
+    "ParameterKey": "AMItoUse",
+    "ParameterValue": "ami-0261755bbcb8c4a84"
+  },
+  {
+    "ParameterKey": "ManagedPolicies",
+    "ParameterValue": "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore,arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  },
+  {
+    "ParameterKey": "KeyPairName",
+    "ParameterValue": "private-server-keypair"
+  },
+  {
+    "ParameterKey": "InstanceType",
+    "ParameterValue": "t3.medium"
+  }
+]
