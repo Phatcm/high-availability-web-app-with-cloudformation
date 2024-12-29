@@ -3,10 +3,15 @@ This project focus on create a high availability infrastructure that can handle 
 
 The README will provide a comprehensive overview of the deployment process and guidance on how to release new builds and deploy changes to environment.
 
+<p align="center">
+  <img src="./screenshoots/0-diagram.png" alt="animated" />
+</p>
+<p align="center">Architecture Diagram</p>
+
 ---
 ## Technologies and Tools Used
 - **Linux Environment**: This instruction is based on Linux environment command, if you use window or others please consider the changes.
-- **AWS CloudFormation**: Infrastructure as code (IaC) tool used to automate the provisioning and management of the infrastructure, including VPC, EKS, ECR, IAM roles, and more.
+- **AWS CloudFormation**: Infrastructure as code (IaC) tool used to automate the provisioning and management of the infrastructure, including VPC, Route tables, Security groups, IAM roles, and more.
 
 ---
 ## Deployment Process
@@ -17,7 +22,21 @@ The README will provide a comprehensive overview of the deployment process and g
     - bastion-host-keypair.pem
 
 ### 2. **Infrastructure Setup with CloudFormation**
-Open CloudFormation page in AWS Console and deploy each on at a time:
+You can use automation script to create and delete resource using:
+```bash
+chmod +x create_stacks.sh delete_stacks.sh
+
+```
+- To create stacks:
+```bash
+./create_stacks.sh
+```
+- To delete stacks:
+```bash
+./delete_stacks.sh
+```
+
+Or Open CloudFormation page in AWS Console and deploy each stack on at a time using commands:
 Stack Network 
 ```bash
 aws cloudformation create-stack --stack-name myNetwork --template-body file://network.yml --parameters file://network-parameters.json --region us-east-1

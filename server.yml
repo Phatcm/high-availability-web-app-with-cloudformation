@@ -51,22 +51,16 @@ Resources:
   AutoScalingSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow http to our hosts and SSH from local only
+      GroupDescription: Allow HTTP traffic from the load balancer and SSH from trusted IPs only
       VpcId:
         Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref LoadBalacerSecurityGroup # Restrict to load balancer
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 0
-          ToPort: 65535
+        - IpProtocol: -1 # Allow all outbound traffic
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
