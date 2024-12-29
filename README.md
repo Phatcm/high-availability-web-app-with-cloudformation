@@ -24,7 +24,7 @@ The README will provide a comprehensive overview of the deployment process and g
 ### 2. **Infrastructure Setup with CloudFormation**
 You can use automation script to create and delete resource using:
 ```bash
-chmod +x create_stacks.sh delete_stacks.sh
+chmod +x create.sh delete.sh
 
 ```
 - To create stacks:
@@ -39,17 +39,17 @@ chmod +x create_stacks.sh delete_stacks.sh
 Or Open CloudFormation page in AWS Console and deploy each stack on at a time using commands:
 Stack Network 
 ```bash
-aws cloudformation create-stack --stack-name myNetwork --template-body file://network.yml --parameters file://network-parameters.json --region us-east-1
+aws cloudformation create-stack --stack-name NetworkStack --template-body file://network.yml --parameters file://network-parameters.json --region us-east-1
 ```
 
 Stack Server
 ```bash
-aws cloudformation create-stack --stack-name myServer --template-body file://server.yml --parameters file://server-parameters.json  --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region us-east-1
+aws cloudformation create-stack --stack-name ServerStack --template-body file://server.yml --parameters file://server-parameters.json  --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region us-east-1
 ```
 
 Stack Bastion
 ```bash
-aws cloudformation create-stack --stack-name myBastionHost --template-body file://bastion-host.yml --parameters file://bastion-host-parameters.json  --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region us-east-1
+aws cloudformation create-stack --stack-name BastionHostStack --template-body file://bastion-host.yml --parameters file://bastion-host-parameters.json  --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region us-east-1
 ```
 
 Check out for ALB in CloudFormation > Stack details > Outputs
